@@ -1,0 +1,5 @@
+# Format : <id>	<action>	<url pattern (optionnel)>
+# action: IGNORE, WARN, FAIL
+# Exemple : ignorer une alerte informative sans impact (en-tête X-Powered-By)
+10036	WARN	# Server Leaks Version Information
+10021	WARN	# X-Content-Type-Options Header Missing

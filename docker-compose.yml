@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: juice-shop
+    ports:
+      - "3002:3000"   # host:container — 3002 côté Mac, 3000 reste interne au conteneur
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  zap-baseline:
+    image: zaproxy/zap-stable:latest
+    container_name: zap-baseline
+    depends_on:
+      - juice-shop
+    network_mode: "host"
+    volumes:
+      - ./reports:/zap/wrk:rw
+      - ./zap/zap-rules.tsv:/zap/wrk/zap-rules.tsv:ro
+    command: >
+      zap-baseline.py
+      -t http://localhost:3002
+      -r zap-baseline-report.html
+      -J zap-baseline-report.json
+      -c zap-rules.tsv
+      -I
+
+  zap-full-scan:
+    image: zaproxy/zap-stable:latest
+    container_name: zap-full-scan
+    depends_on:
+      - juice-shop
+    network_mode: "host"
+    volumes:
+      - ./reports:/zap/wrk:rw
+      - ./zap/zap-rules.tsv:/zap/wrk/zap-rules.tsv:ro
+    command: >
+      zap-full-scan.py
+      -t http://localhost:3002
+      -r zap-full-report.html
+      -J zap-full-report.json
+      -c zap-rules.tsv
+      -I

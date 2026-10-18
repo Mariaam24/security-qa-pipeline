@@ -1,0 +1,112 @@
+name: security-pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"   # scan complet hebdomadaire (lundi 3h UTC)
+  workflow_dispatch: {}
+
+jobs:
+  security-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Démarrer OWASP Juice Shop (Docker)
+        run: |
+          docker run -d --name juice-shop -p 3000:3000 bkimminich/juice-shop:latest
+          echo "Attente de disponibilité de l'application..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 > /dev/null; then
+              echo "Juice Shop est prêt."
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Lancer les tests de sécurité pytest (auth / IDOR / injections)
+        id: pytest
+        env:
+          TARGET_URL: http://localhost:3000
+        run: |
+          pytest tests/ -v --junitxml=reports/pytest-results.xml --html=reports/pytest-report.html --self-contained-html
+        continue-on-error: true
+
+      - name: Lancer le scan OWASP ZAP (baseline)
+        uses: zaproxy/action-baseline@v0.13.0
+        with:
+          target: "http://localhost:3000"
+          rules_file_name: "zap/zap-rules.tsv"
+          cmd_options: "-J zap-baseline-report.json -r zap-baseline-report.html"
+          fail_action: false
+
+      - name: Déplacer les rapports ZAP dans reports/
+        run: |
+          mkdir -p reports
+          mv zap-baseline-report.json reports/ 2>/dev/null || true
+          mv zap-baseline-report.html reports/ 2>/dev/null || true
+          mv report_json.json reports/zap-baseline-report.json 2>/dev/null || true
+          mv report_html.html reports/zap-baseline-report.html 2>/dev/null || true
+
+      - name: Générer le rapport de sécurité consolidé (gate qualité)
+        id: report
+        run: python scripts/generate_security_report.py --skip-pytest
+
+      - name: Publier les rapports en artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: reports/
+          retention-days: 30
+
+      - name: Vérifier le statut global et échouer si vulnérabilité critique
+        if: steps.pytest.outcome == 'failure' || steps.report.outcome == 'failure'
+        run: |
+          echo "::error:: Une ou plusieurs vulnérabilités critiques ont été détectées."
+          exit 1
+
+  full-scan:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Démarrer OWASP Juice Shop (Docker)
+        run: |
+          docker run -d --name juice-shop -p 3000:3000 bkimminich/juice-shop:latest
+          sleep 15
+
+      - name: Lancer le scan OWASP ZAP complet (full scan)
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: "http://localhost:3000"
+          rules_file_name: "zap/zap-rules.tsv"
+          cmd_options: "-J zap-full-report.json -r zap-full-report.html"
+          fail_action: false
+
+      - name: Publier le rapport complet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-full-scan-report
+          path: |
+            report_json.json
+            report_html.html
+          retention-days: 30
