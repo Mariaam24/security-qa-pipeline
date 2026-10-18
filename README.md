@@ -4,7 +4,7 @@ Pipeline CI/CD de **tests de sécurité automatisés** combinant QA fonctionnel 
 
 > Positionnement : QA Automation avec sensibilité cybersécurité — un seul projet qui sert deux profils (QA Engineer / Cybersecurity Analyst).
 
-![CI](https://github.com/<TON_USER>/security-qa-pipeline/actions/workflows/security-pipeline.yml/badge.svg)
+![CI](https://github.com/Mariaam24/security-qa-pipeline/actions/workflows/security-pipeline.yml/badge.svg)
 
 ---
 
@@ -71,7 +71,7 @@ Démontrer une capacité à :
 
 ```bash
 # 1. Cloner le repo
-git clone https://github.com/<TON_USER>/security-qa-pipeline.git
+git clone https://github.com/Mariaam24/security-qa-pipeline.git
 cd security-qa-pipeline
 
 # 2. Lancer la cible vulnérable
